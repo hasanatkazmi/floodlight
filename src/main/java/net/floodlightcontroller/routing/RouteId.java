@@ -17,6 +17,8 @@
 
 package net.floodlightcontroller.routing;
 
+import java.util.LinkedList;
+
 import org.openflow.util.HexString;
 
 /**
@@ -27,11 +29,25 @@ import org.openflow.util.HexString;
 public class RouteId implements Cloneable, Comparable<RouteId> {
     protected Long src;
     protected Long dst;
+    protected LinkedList<Link> links;
 
     public RouteId(Long src, Long dst) {
         super();
         this.src = src;
         this.dst = dst;
+    }
+    
+    /**
+	* Use this function if there are multiple routes between to points.
+	*
+	* @param src 		id of source switch
+	* @param dst   		id of destination switch
+    */
+    public RouteId(Long src, Long dst, LinkedList<Link> links) {
+        super();
+        this.src = src;
+        this.dst = dst;
+        this.links = links;
     }
 
     public Long getSrc() {
@@ -56,6 +72,7 @@ public class RouteId implements Cloneable, Comparable<RouteId> {
         int result = 1;
         result = prime * result + ((dst == null) ? 0 : dst.hashCode());
         result = prime * result + ((src == null) ? 0 : src.hashCode());
+        result = prime * result + ((links == null) ? 0 : links.hashCode());
         return result;
     }
 
@@ -78,6 +95,7 @@ public class RouteId implements Cloneable, Comparable<RouteId> {
                 return false;
         } else if (!src.equals(other.src))
             return false;
+        //TODO: check if links var of both objects is same. How to?
         return true;
     }
 
@@ -94,6 +112,7 @@ public class RouteId implements Cloneable, Comparable<RouteId> {
 
     @Override
     public int compareTo(RouteId o) {
+    	//TODO: incorporate links
         int result = src.compareTo(o.getSrc());
         if (result != 0)
             return result;

@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +36,7 @@ import net.floodlightcontroller.routing.Link;
 import net.floodlightcontroller.routing.Route;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.topology.web.TopologyWebRoutable;
+import net.floodlightcontroller.trafficmatrix.ITrafficMatrixService;
 
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFPacketIn;
@@ -95,6 +97,9 @@ public class TopologyManager implements
     // These must be accessed using getCurrentInstance(), not directly
     protected TopologyInstance currentInstance;
     protected TopologyInstance currentInstanceWithoutTunnels;
+    
+    protected ITrafficMatrixService trafficmatrix;
+
     
     protected SingletonTask newInstanceTask;
     private Date lastUpdateTime;
@@ -451,7 +456,7 @@ public class TopologyManager implements
 
     @Override
     public Route getRoute(long src, long dst) {
-        return getRoute(src, dst, true);
+    	return getRoute(src, dst, true);
     }
 
     @Override
@@ -462,7 +467,12 @@ public class TopologyManager implements
 
     @Override
     public Route getRoute(long src, short srcPort, long dst, short dstPort) {
-        return getRoute(src, srcPort, dst, dstPort, true);
+    	//TODO: why are so many getRoute functions here, in what scenarios will they be called?
+    	//TODO: call getAllRoutes(replacing buildAllRoutes once getAllRoutes is fixed)
+    	//LinkedList<Route> routes = currentInstance.getAllRoutes(src, srcPort, dst, dstPort);
+    	LinkedList<Route> routes = currentInstance.buildAllRoutes(src, srcPort, dst, dstPort);
+    	return trafficmatrix.getBestRoute(routes);
+    	//return getRoute(src, srcPort, dst, dstPort, true);
     }
 
     @Override
@@ -604,6 +614,8 @@ public class TopologyManager implements
         appliedUpdates = new HashSet<LDUpdate>();
 
         lastUpdateTime = new Date();
+        
+        trafficmatrix = context.getServiceImpl(ITrafficMatrixService.class);
     }
 
     @Override

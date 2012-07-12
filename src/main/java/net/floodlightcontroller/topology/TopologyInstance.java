@@ -55,6 +55,8 @@ public class TopologyInstance {
     protected Map<Long, Set<NodePortTuple>> clusterBroadcastNodePorts;
     protected Map<Long, BroadcastTree> clusterBroadcastTrees;
     protected LRUHashMap<RouteId, Route> pathcache;
+    protected LRUHashMap<RouteId, LinkedList<Route>> pathscache;
+
 
     public TopologyInstance() {
         this.switches = new HashSet<Long>();
@@ -590,6 +592,109 @@ public class TopologyInstance {
 
     protected Set<Cluster> getClusters() {
         return clusters;
+    }
+
+    /**
+	* returns all routes from link generating from (src, srcPort) to (dst, dstPort).
+	* This function works as cache layer on buildAllRoutes. These routes are cached for better performance
+	*
+	*
+	* @param src 		id of switch from source's end
+	* @param srcPort 	id of port on src switch from where src host (or another switch) is connected 
+	* @param dst   		id of switch from where destination host is connected
+	* @param dstPort   	id of port of dst switch which is connected to destination host (or switch)
+    * @return          	all routes
+    */
+    protected LinkedList<Route> getAllRoutes(long src, short srcPort, long dst, short dstPort){
+    	//TODO: this function failed after merging from upstream - FIX IT
+    	RouteId key = new RouteId(src, dst);
+    	if (!pathscache.containsKey(key)){
+    		pathscache.put( key, buildAllRoutes(src, srcPort, dst, dstPort) );
+    	}
+    	return pathscache.get(key); //TODO: MUST implement this: cache clear on topology change
+    }
+
+    /**
+	* generates and returns all routes from link generating from (src, srcPort) to (dst, dstPort).
+	* 
+	* This function is called by getAllRoutes
+	*
+	*
+	* @param src 		id of switch from source's end
+	* @param srcPort 	id of port on src switch from where src host (or another switch) is connected 
+	* @param dst   		id of switch from where destination host is connected
+	* @param dstPort   	id of port of dst switch which is connected to destination host (or switch)
+    * @return          	all routes
+    */
+    protected LinkedList<Route> buildAllRoutes(long src, short srcPort, long dst, short dstPort) {
+        //if (switchClusterMap.get(srcId).id != switchClusterMap.get(dstId).id)return false; // 0 routes 
+    	Iterator<Set<Link>> i =  switchClusterMap.get(src).getLinks().values().iterator() ;
+    	HashSet<Link> links = new HashSet<Link>();
+    	while(i.hasNext()){
+    		links.addAll(i.next());
+    	}
+
+    	LinkedList<Route> routes = new LinkedList<Route>();
+    	for(LinkedList<Link> path : DFS( links, src, dst,  new LinkedList<Long>(), null, new LinkedList<Link>() )){
+    		ArrayList<NodePortTuple> nptList = new ArrayList<NodePortTuple>();
+    		nptList.add(new NodePortTuple(src, srcPort));
+    		for(Link l : path){
+    			nptList.add(new NodePortTuple(l.getSrc(), l.getSrcPort()));
+    			nptList.add(new NodePortTuple(l.getDst(), l.getDstPort()));    			
+    		}
+    		nptList.add(new NodePortTuple(dst, dstPort));
+    		
+    		Route route = new Route(
+    				new RouteId(src, dst, path),
+    				nptList);
+    		routes.add(route);
+    	}
+
+    	return routes;
+    }
+
+    /**
+	* A utility function used to find all multiple routes in a topology
+	* This function is used by buildAllRoutes
+	* This is typical DFS with one modification to accommodate overlapping paths  
+	* 
+	*
+	* @param links 		list of all inter-switch links in the cluster
+	* @param src 		id of switch from where to start search
+	* @param dst   		id of switch where to end the search
+	* @param currLink   used for recursive buildup of function, should be send as null from other functions
+	* @param currLinks  used for recursive buildup of function (to keep track of path), should be send as empty list from other functions
+    * @return          	all possible paths represented as LinkedList of Links
+    */    
+    protected LinkedList<LinkedList<Link>> DFS(HashSet<Link> links, Long src, Long dst, LinkedList<Long> visited, Link currLink, LinkedList<Link> currLinks){
+    	
+    	LinkedList<LinkedList<Link>> toreturn = new LinkedList<LinkedList<Link>>();
+    	
+    	if (visited.contains(src)){
+    		//already visited
+    		return toreturn;
+    	}
+    	
+    	if (src == dst){
+    		LinkedList<Link> newroute = new LinkedList<Link>();
+    		newroute.addAll(currLinks);
+    		newroute.add(currLink);
+    		toreturn.add(newroute);
+    		return toreturn;
+    	}
+    	
+    	visited.add(src);
+    	if(currLink!=null)currLinks.add(currLink);
+    	
+    	for(Link l : links){
+    		if(l.getSrc() == src){
+    			toreturn.addAll( DFS(links, l.getDst(), dst, visited, l, currLinks) );		
+    		}
+    	}
+    	
+    	visited.remove((Long) src); //unlike DFS removed this node, so that this can work for paths which aren't disjoit
+    	currLinks.remove(currLink);
+    	return toreturn;
     }
 
     // IRoutingEngineService interfaces
